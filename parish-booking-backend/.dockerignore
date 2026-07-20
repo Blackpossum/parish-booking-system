@@ -1,0 +1,18 @@
+node_modules
+dist
+build
+*.tsbuildinfo
+
+# Secrets must never enter the image — env vars come from the platform.
+.env
+.env.*
+!.env.example
+
+# Runtime data lives on the mounted volume.
+uploads
+
+.git
+.gitignore
+*.log
+Dockerfile
+.dockerignore
