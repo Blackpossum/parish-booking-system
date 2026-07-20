@@ -11,6 +11,7 @@ import { DecideBookingDto } from './dto/decide-booking.dto';
 import { QueryBookingsDto } from './dto/query-bookings.dto';
 import { ScheduleGateway } from '../schedule/schedule.gateway';
 import { PushService } from '../push/push.service';
+import { parishDayRange } from '../config/time';
 
 // Postgres error code for an EXCLUDE constraint violation.
 // See: https://www.postgresql.org/docs/current/errcodes-appendix.html
@@ -194,15 +195,14 @@ export class BookingsService {
 
   /** Used by the public display screen: today's approved bookings, grouped by room. */
   async findTodaysApprovedSchedule() {
-    const startOfDay = new Date();
-    startOfDay.setHours(0, 0, 0, 0);
-    const endOfDay = new Date();
-    endOfDay.setHours(23, 59, 59, 999);
+    // Must be the parish's calendar day, not the server's UTC one — see
+    // config/time.ts for why this matters.
+    const { start, end } = parishDayRange();
 
     return this.prisma.booking.findMany({
       where: {
         status: 'approved',
-        startTime: { gte: startOfDay, lte: endOfDay },
+        startTime: { gte: start, lte: end },
       },
       include: { room: true },
       orderBy: [{ roomId: 'asc' }, { startTime: 'asc' }],

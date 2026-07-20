@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateRoomDto } from './dto/create-room.dto';
 import { UpdateRoomDto } from './dto/update-room.dto';
+import { parishDayRange } from '../config/time';
 
 @Injectable()
 export class RoomsService {
@@ -25,23 +26,21 @@ export class RoomsService {
   async availability(id: string, dateStr?: string) {
     const room = await this.findOne(id);
 
-    const day = dateStr ? new Date(dateStr) : new Date();
-    const startOfDay = new Date(day);
-    startOfDay.setHours(0, 0, 0, 0);
-    const endOfDay = new Date(day);
-    endOfDay.setHours(23, 59, 59, 999);
+    // Same timezone trap as the display schedule: the availability table must
+    // cover the parish's calendar day, not the server's UTC one.
+    const { start, end } = parishDayRange(dateStr ? new Date(dateStr) : new Date());
 
     const bookings = await this.prisma.booking.findMany({
       where: {
         roomId: id,
         status: 'approved',
-        startTime: { gte: startOfDay, lte: endOfDay },
+        startTime: { gte: start, lte: end },
       },
       orderBy: { startTime: 'asc' },
       select: { id: true, startTime: true, endTime: true, purpose: true },
     });
 
-    return { room, date: startOfDay.toISOString(), bookings };
+    return { room, date: start.toISOString(), bookings };
   }
 
   create(dto: CreateRoomDto) {

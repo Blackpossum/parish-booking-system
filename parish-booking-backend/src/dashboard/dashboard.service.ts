@@ -1,19 +1,15 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { parishWeekRange } from '../config/time';
 
 @Injectable()
 export class DashboardService {
   constructor(private prisma: PrismaService) {}
 
   async summary() {
-    // "Minggu ini" — bookings whose start falls in the current week (Mon–Sun).
-    const now = new Date();
-    const weekStart = new Date(now);
-    const day = (weekStart.getDay() + 6) % 7; // 0 = Monday
-    weekStart.setDate(weekStart.getDate() - day);
-    weekStart.setHours(0, 0, 0, 0);
-    const weekEnd = new Date(weekStart);
-    weekEnd.setDate(weekEnd.getDate() + 7);
+    // "Minggu ini" — bookings whose start falls in the current week (Mon–Sun),
+    // bounded in the parish timezone rather than the server's UTC day.
+    const { start: weekStart, end: weekEnd } = parishWeekRange();
 
     const [bookingsThisWeek, pendingCount, activeRooms, newReports, pending] = await Promise.all([
       this.prisma.booking.count({
