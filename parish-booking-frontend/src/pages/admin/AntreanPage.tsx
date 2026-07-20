@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api, ApiError, type Booking } from '../../lib/api';
 import { PageHeading, BookingStatusTag } from '../../components/ui';
+import { useScheduleSocket } from '../../hooks/useScheduleSocket';
 
 export function AntreanPage() {
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -17,6 +18,9 @@ export function AntreanPage() {
   }, []);
 
   useEffect(() => load(), [load]);
+
+  // New requests from umat arrive here without a refresh.
+  useScheduleSocket(load);
 
   async function decide(id: string, action: 'approve' | 'reject') {
     setError(null);

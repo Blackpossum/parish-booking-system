@@ -1,10 +1,15 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { api, type Booking } from '../lib/api';
 import { PageHeading, BookingStatusTag } from '../components/ui';
+import { useScheduleSocket } from '../hooks/useScheduleSocket';
 
 export function BookingSayaPage() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const load = useCallback(() => {
+    api.myBookings().then(setBookings);
+  }, []);
 
   useEffect(() => {
     api
@@ -12,6 +17,9 @@ export function BookingSayaPage() {
       .then(setBookings)
       .finally(() => setLoading(false));
   }, []);
+
+  // The umat sees Menunggu flip to Disetujui/Ditolak without refreshing.
+  useScheduleSocket(load);
 
   return (
     <>

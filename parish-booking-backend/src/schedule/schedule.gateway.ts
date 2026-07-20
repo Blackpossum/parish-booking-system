@@ -18,7 +18,7 @@ import { isOriginAllowed } from '../config/cors';
 })
 export class ScheduleGateway {
   @WebSocketServer()
-  server: Server;
+  server!: Server;
 
   broadcastScheduleChanged(roomId: string) {
     this.server?.emit('schedule:changed', { roomId, at: new Date().toISOString() });

@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { io } from 'socket.io-client';
 import QRCode from 'react-qr-code';
-import { api, API_BASE, type Booking, type Room } from '../lib/api';
+import { api, type Booking, type Room } from '../lib/api';
 import { ScheduleGrid } from '../components/ScheduleGrid';
+import { useScheduleSocket } from '../hooks/useScheduleSocket';
 
 // Wall-mounted monitor outside the secretariat: read-only, landscape 16:9,
 // refreshes itself from the WebSocket (with a slow poll as a safety net).
@@ -10,7 +10,6 @@ export function DisplayPage() {
   const [rooms, setRooms] = useState<Room[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [now, setNow] = useState(new Date());
-  const [connected, setConnected] = useState(false);
 
   useEffect(() => {
     api.listRooms().then(setRooms);
@@ -20,27 +19,14 @@ export function DisplayPage() {
     api.todaysSchedule().then(setBookings);
   }, []);
 
+  // The gateway emits schedule:changed the instant a booking is created,
+  // approved or rejected. The hook also refetches on (re)connect.
+  const { connected } = useScheduleSocket(load);
+
   useEffect(() => {
     load();
-
-    // The gateway emits schedule:changed the instant an admin approves or
-    // rejects something, so this screen re-fetches immediately.
-    const socket = io(`${API_BASE}/schedule`, { transports: ['websocket'] });
-    socket.on('connect', () => {
-      setConnected(true);
-      // Catch up on anything that changed while the socket was down — those
-      // schedule:changed events were missed entirely.
-      load();
-    });
-    socket.on('disconnect', () => setConnected(false));
-    socket.on('schedule:changed', load);
-
     const clock = setInterval(() => setNow(new Date()), 1000);
-
-    return () => {
-      socket.disconnect();
-      clearInterval(clock);
-    };
+    return () => clearInterval(clock);
   }, [load]);
 
   // Polling exists only to cover a dead socket. While the socket is connected,

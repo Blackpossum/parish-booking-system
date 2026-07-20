@@ -35,7 +35,7 @@ export class BookingsService {
     // No conflict check here on purpose: multiple pending requests for the
     // same slot are allowed to coexist. The room is only "claimed" at
     // approval time — see approve() below.
-    return this.prisma.booking.create({
+    const created = await this.prisma.booking.create({
       data: {
         roomId: dto.roomId,
         pemohonId,
@@ -50,6 +50,11 @@ export class BookingsService {
       },
       include: { room: true },
     });
+
+    // Tells the admin's approval queue a new request just landed. Without this
+    // the queue only updated on a manual refresh.
+    this.scheduleGateway.broadcastScheduleChanged(created.roomId);
+    return created;
   }
 
   findAll(query: QueryBookingsDto) {
@@ -154,6 +159,9 @@ export class BookingsService {
       include: { room: true },
     });
 
+    // A rejection frees the slot for other pending requests, so every listening
+    // screen needs to know — not just on approval.
+    this.scheduleGateway.broadcastScheduleChanged(updated.roomId);
     void this.notifyDecision(updated.pemohonId, updated.room.name, updated.startTime, 'rejected');
     return updated;
   }

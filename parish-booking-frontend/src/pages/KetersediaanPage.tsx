@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api, type Room, type RoomAvailability } from '../lib/api';
 import { PageHeading } from '../components/ui';
+import { useScheduleSocket } from '../hooks/useScheduleSocket';
 
 // The availability board is shown as two-hour blocks across the parish's
 // usable day, which matches how the secretariat books rooms in practice.
@@ -34,6 +35,14 @@ export function KetersediaanPage() {
     setAvailability(null);
     api.roomAvailability(selectedId).then(setAvailability);
   }, [selectedId]);
+
+  // Refresh the slot table when a booking is approved or rejected elsewhere.
+  // Kept silent (no spinner) so the table doesn't flicker under the user.
+  const refreshAvailability = useCallback(() => {
+    if (!selectedId) return;
+    api.roomAvailability(selectedId).then(setAvailability);
+  }, [selectedId]);
+  useScheduleSocket(refreshAvailability);
 
   const slots = useMemo<Slot[]>(() => {
     if (!availability) return [];

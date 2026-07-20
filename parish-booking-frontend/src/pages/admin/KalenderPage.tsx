@@ -1,13 +1,18 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { api, type Booking, type Room } from '../../lib/api';
 import { PageHeading } from '../../components/ui';
 import { ScheduleGrid } from '../../components/ScheduleGrid';
+import { useScheduleSocket } from '../../hooks/useScheduleSocket';
 
 export function KalenderPage() {
   const [rooms, setRooms] = useState<Room[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [now, setNow] = useState(new Date());
   const [loading, setLoading] = useState(true);
+
+  const loadSchedule = useCallback(() => {
+    api.todaysSchedule().then(setBookings);
+  }, []);
 
   useEffect(() => {
     Promise.all([api.listRooms(), api.todaysSchedule()])
@@ -20,6 +25,9 @@ export function KalenderPage() {
     const clock = setInterval(() => setNow(new Date()), 30_000);
     return () => clearInterval(clock);
   }, []);
+
+  // Approvals show up on the calendar as they happen.
+  useScheduleSocket(loadSchedule);
 
   const today = now.toLocaleDateString('id-ID', {
     weekday: 'long',

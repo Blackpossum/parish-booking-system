@@ -1,6 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { NestExpressApplication } from '@nestjs/platform-express';
+import type { NextFunction, Request, Response } from 'express';
 import { existsSync, mkdirSync } from 'fs';
 import { AppModule } from './app.module';
 import { isOriginAllowed } from './config/cors';
@@ -19,6 +20,20 @@ async function bootstrap() {
       // Chrome caps the cache at 2h regardless of the value.
       maxAge: 86_400,
     },
+  });
+
+  // Express adds an ETag to every JSON response but no Cache-Control. With no
+  // explicit directive the browser falls back to *heuristic* caching and may
+  // serve a stale body without revalidating at all — which is why an approved
+  // booking only appeared after a manual refresh. This is a live schedule API,
+  // so nothing it returns should ever be cached.
+  app.set('etag', false);
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    // Uploaded PDFs are immutable once written, so leave those cacheable.
+    if (!req.path.startsWith('/uploads/')) {
+      res.setHeader('Cache-Control', 'no-store');
+    }
+    next();
   });
 
   app.useGlobalPipes(
