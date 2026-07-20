@@ -14,6 +14,10 @@ async function bootstrap() {
       // but this avoids answering every stray cross-origin probe with a 500.
       origin: (origin, cb) => cb(null, isOriginAllowed(origin)),
       credentials: true,
+      // Without this the browser re-runs the OPTIONS preflight before EVERY
+      // call, doubling the round trips on a link where latency dominates.
+      // Chrome caps the cache at 2h regardless of the value.
+      maxAge: 86_400,
     },
   });
 
