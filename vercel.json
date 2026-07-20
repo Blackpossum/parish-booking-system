@@ -1,0 +1,17 @@
+{
+  "services": {
+    "parish-booking-backend": {
+      "root": "parish-booking-backend",
+      "entrypoint": "src/main.ts"
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": {
+        "type": "service",
+        "service": "parish-booking-backend"
+      }
+    }
+  ]
+}

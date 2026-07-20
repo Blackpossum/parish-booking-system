@@ -1,14 +1,17 @@
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
+import { Logger, ValidationPipe } from '@nestjs/common';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import type { NextFunction, Request, Response } from 'express';
 import { existsSync, mkdirSync } from 'fs';
 import { AppModule } from './app.module';
-import { isOriginAllowed } from './config/cors';
+import { allowedOrigins, isOriginAllowed } from './config/cors';
 import { uploadsDir } from './config/uploads';
+import { AllExceptionsFilter } from './common/logging/all-exceptions.filter';
+import { resolveLogLevels } from './common/logging/log-levels';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    logger: resolveLogLevels(),
     cors: {
       // Disallowed origins get `false` rather than a thrown Error: the browser
       // blocks the response either way (no Access-Control-Allow-Origin header),
@@ -36,6 +39,10 @@ async function bootstrap() {
     next();
   });
 
+  // Nothing should fail silently: this logs 5xx with a stack trace and returns
+  // a consistent error body for everything else.
+  app.useGlobalFilters(new AllExceptionsFilter());
+
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true, // strip unknown fields from incoming DTOs
@@ -53,7 +60,17 @@ async function bootstrap() {
 
   const port = process.env.PORT ?? 3000;
   await app.listen(port, '0.0.0.0');
-  console.log(`Parish booking API listening on port ${port}`);
-  console.log(`Uploads directory: ${dir}`);
+
+  const logger = new Logger('Bootstrap');
+  logger.log(`Parish booking API listening on port ${port}`);
+  logger.log(`Uploads directory: ${dir}`);
+  logger.log(`Allowed CORS origins: ${allowedOrigins().join(', ') || '(none configured)'}`);
+  logger.log(`Log level: ${process.env.LOG_LEVEL ?? 'log'}`);
 }
-bootstrap();
+
+bootstrap().catch((err) => {
+  // Without this a failure during bootstrap exits with an unhandled rejection
+  // and no usable message in the deploy logs.
+  new Logger('Bootstrap').error('Failed to start application', err instanceof Error ? err.stack : String(err));
+  process.exit(1);
+});
