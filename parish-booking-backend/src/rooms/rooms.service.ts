@@ -34,7 +34,8 @@ export class RoomsService {
       where: {
         roomId: id,
         status: 'approved',
-        startTime: { gte: start, lte: end },
+        // `end` is exclusive — see parishDayRange.
+        startTime: { gte: start, lt: end },
       },
       orderBy: { startTime: 'asc' },
       select: { id: true, startTime: true, endTime: true, purpose: true },

@@ -202,7 +202,8 @@ export class BookingsService {
     return this.prisma.booking.findMany({
       where: {
         status: 'approved',
-        startTime: { gte: start, lte: end },
+        // `end` is exclusive — see parishDayRange.
+        startTime: { gte: start, lt: end },
       },
       include: { room: true },
       orderBy: [{ roomId: 'asc' }, { startTime: 'asc' }],

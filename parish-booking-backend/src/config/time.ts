@@ -1,3 +1,5 @@
+import { Temporal } from '@js-temporal/polyfill';
+
 /**
  * "Today" means today *in the parish's timezone* — not the server's.
  *
@@ -6,77 +8,58 @@
  * seven hours of every day: at 02:00 WIB the server is still on the previous
  * UTC date, so the Monitor Display showed an empty schedule while five
  * approved bookings existed for the day the staff were actually looking at.
+ *
+ * Uses Temporal, which models a zoned date-time directly instead of inferring
+ * the offset by formatting through Intl and diffing the result. `startOfDay()`
+ * is also DST-correct by construction — on a day where local midnight does not
+ * exist it returns the first instant that does.
+ *
+ * Temporal is still a Stage 3 proposal: Node 22 (the runtime in our Dockerfile)
+ * does not expose it, and Node 24 only does behind --harmony-temporal. Hence
+ * the official polyfill. When the runtime ships it natively this import is the
+ * only line that needs to change.
  */
 export function parishTimeZone(): string {
   return process.env.PARISH_TIMEZONE ?? 'Asia/Jakarta';
 }
 
 /**
- * Offset (ms) to add to a UTC instant to get the wall-clock time in `timeZone`.
- * Derived from Intl rather than hardcoded so it stays correct if the parish
- * timezone is ever changed to one that observes DST.
+ * Half-open range `[start, end)` covering a calendar day in the parish
+ * timezone, as UTC instants.
+ *
+ * The upper bound is *exclusive* — callers must query with `lt`, not `lte`.
+ * That avoids the classic "23:59:59.999" fudge, which silently drops anything
+ * landing in the final millisecond.
  */
-function offsetMs(instant: Date, timeZone: string): number {
-  const dtf = new Intl.DateTimeFormat('en-US', {
-    timeZone,
-    hour12: false,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  });
-  const p = Object.fromEntries(dtf.formatToParts(instant).map((x) => [x.type, x.value]));
-  const asIfUtc = Date.UTC(
-    Number(p.year),
-    Number(p.month) - 1,
-    Number(p.day),
-    Number(p.hour) % 24,
-    Number(p.minute),
-    Number(p.second),
+export function parishDayRange(reference: Date = new Date()): { start: Date; end: Date } {
+  const zoned = Temporal.Instant.fromEpochMilliseconds(reference.getTime()).toZonedDateTimeISO(
+    parishTimeZone(),
   );
-  // Intl only resolves to whole seconds, so compare against a second-truncated
-  // instant. Otherwise the offset absorbs the millisecond remainder and the
-  // computed day boundary lands a fraction of a second late — enough to exclude
-  // a booking starting exactly at local midnight.
-  const truncatedToSecond = Math.floor(instant.getTime() / 1000) * 1000;
-  return asIfUtc - truncatedToSecond;
+
+  const start = zoned.startOfDay();
+  const end = start.add({ days: 1 });
+
+  return {
+    start: new Date(start.epochMilliseconds),
+    end: new Date(end.epochMilliseconds),
+  };
 }
 
 /**
- * The UTC instants bounding a calendar day in the parish timezone.
- * Pass `reference` to get the range for the day containing that instant.
+ * Half-open range `[start, end)` covering the Monday–Sunday week containing
+ * `reference`, in the parish timezone.
  */
-export function parishDayRange(reference: Date = new Date()): { start: Date; end: Date } {
-  const tz = parishTimeZone();
-  const offset = offsetMs(reference, tz);
-
-  // Shift into "wall clock as UTC" space so date arithmetic is trivial.
-  const wall = new Date(reference.getTime() + offset);
-  const startWall = Date.UTC(wall.getUTCFullYear(), wall.getUTCMonth(), wall.getUTCDate(), 0, 0, 0, 0);
-  const endWall = startWall + 24 * 60 * 60 * 1000 - 1;
-
-  return { start: new Date(startWall - offset), end: new Date(endWall - offset) };
-}
-
-/** Monday 00:00 → next Monday 00:00, in the parish timezone. */
 export function parishWeekRange(reference: Date = new Date()): { start: Date; end: Date } {
-  const tz = parishTimeZone();
-  const offset = offsetMs(reference, tz);
-  const wall = new Date(reference.getTime() + offset);
-
-  const dayIndex = (wall.getUTCDay() + 6) % 7; // 0 = Monday
-  const startWall = Date.UTC(
-    wall.getUTCFullYear(),
-    wall.getUTCMonth(),
-    wall.getUTCDate() - dayIndex,
-    0,
-    0,
-    0,
-    0,
+  const zoned = Temporal.Instant.fromEpochMilliseconds(reference.getTime()).toZonedDateTimeISO(
+    parishTimeZone(),
   );
-  const endWall = startWall + 7 * 24 * 60 * 60 * 1000;
 
-  return { start: new Date(startWall - offset), end: new Date(endWall - offset) };
+  // Temporal's dayOfWeek is ISO-numbered: 1 = Monday … 7 = Sunday.
+  const start = zoned.subtract({ days: zoned.dayOfWeek - 1 }).startOfDay();
+  const end = start.add({ weeks: 1 });
+
+  return {
+    start: new Date(start.epochMilliseconds),
+    end: new Date(end.epochMilliseconds),
+  };
 }
