@@ -45,7 +45,7 @@ export function ScheduleGrid({
       if (!map.has(b.roomId)) map.set(b.roomId, []);
       map.get(b.roomId)!.push(b);
     }
-    console.log("[DEBUG] byRoom Map:", map)
+    // console.log("[DEBUG] byRoom Map:", map)
     return map;
   }, [rooms, bookings]);
 
@@ -77,7 +77,7 @@ export function ScheduleGrid({
           style={{ height: gridHeight }}
         >
           {hourMarks.map((h) => {
-            console.log("[DEBUG] hourmarks h :", h)
+            // console.log("[DEBUG] hourmarks h :", h)
             return (
             <div
               key={h}
