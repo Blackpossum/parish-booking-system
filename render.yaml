@@ -1,0 +1,69 @@
+# Render Blueprint — backend API + PostgreSQL.
+# The frontend is deployed separately (Vercel/Netlify), see netlify.toml.
+#
+# Apply with: Render Dashboard → New → Blueprint → pick this repo.
+
+services:
+  - type: web
+    name: parish-booking-api
+    runtime: node
+    region: singapore # closest region to Surakarta
+    # A disk requires a paid instance. To start on the free tier instead, set
+    # `plan: free` and delete the `disk:` block below — but note that uploaded
+    # Surat Permohonan PDFs will then be lost on every deploy/restart.
+    plan: starter
+    rootDir: parish-booking-backend
+
+    # Unlike Railway/Nixpacks, Render does not install dependencies for you.
+    # --include=dev is required because the build needs typescript + @nestjs/cli.
+    buildCommand: npm ci --include=dev && npx prisma generate && npm run build
+    # `migrate deploy` is idempotent, so running it on each boot is safe and
+    # keeps this working on plans without pre-deploy commands.
+    startCommand: npx prisma migrate deploy && node dist/main
+
+    healthCheckPath: /health
+
+    # rootDir already scopes autodeploys to this directory; the explicit filter
+    # documents the intent. Build filter paths are repo-root relative, NOT
+    # relative to rootDir.
+    buildFilter:
+      paths:
+        - parish-booking-backend/**
+
+    # Persistent storage for uploaded Surat Permohonan PDFs. Without this the
+    # container filesystem is ephemeral and attachments disappear on redeploy.
+    disk:
+      name: parish-uploads
+      mountPath: /data
+      sizeGB: 1
+
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: parish-booking-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true # Render generates a strong secret on first apply
+      - key: UPLOADS_DIR
+        value: /data/uploads
+      - key: MAIL_FROM
+        value: sekretariat@purbayan-paroki.org
+      - key: VAPID_SUBJECT
+        value: mailto:sekretariat@purbayan-paroki.org
+      # Set these in the dashboard — secrets are deliberately not committed.
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      # Frontend origin(s), comma-separated, no trailing slash. The API rejects
+      # unlisted origins, so this must be set once the frontend has a domain.
+      - key: CORS_ORIGINS
+        sync: false
+
+databases:
+  - name: parish-booking-db
+    region: singapore
+    plan: basic-256mb
+    postgresMajorVersion: "16"
